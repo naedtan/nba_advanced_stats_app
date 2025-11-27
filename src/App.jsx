@@ -34,6 +34,15 @@ const getEfficiencyColor = (pct) => {
   return "#ef4444";                
 };
 
+const getDefenseColor = (rank) => {
+  if (!rank) return "#27272a";
+  if (rank <= 5) return "#ef4444"; // Top 5 Defense (Hard) -> Red
+  if (rank <= 10) return "#f97316";
+  if (rank <= 20) return "#eab308";
+  if (rank <= 25) return "#84cc16";
+  return "#16a34a"; // Bottom 5 Defense (Easy) -> Green
+};
+
 // --- SLIDER COMPONENT ---
 const CustomSlider = ({ value, min, max, onChange, height }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -82,8 +91,44 @@ const CustomSlider = ({ value, min, max, onChange, height }) => {
 };
 
 // --- COURT VISUAL ---
-// Defined outside component to prevent re-render issues
-const ZoneLabel = ({ x, y, zoneKey, data, mode, totalPoints }) => {
+const ZONE_PATHS = {
+  lc3: { d: "M 0 330 L 44 330 L 44 470 L 0 470 Z", x: 22, y: 410 },
+  rc3: { d: "M 456 330 L 500 330 L 500 470 L 456 470 Z", x: 478, y: 410 },
+  paint: { d: "M 170 470 L 170 280 L 330 280 L 330 470", x: 250, y: 340 },
+  ra: { d: "M 210 417.5 A 40 40 0 0 1 290 417.5 L 290 470 L 210 470 Z", x: 250, y: 440 },
+  mid: { d: "M 44 470 L 44 330 Q 250 100 456 330 L 456 470 L 330 470 L 330 280 L 170 280 L 170 470 Z", x: 250, y: 250 },
+  ab3: { d: "M 0 330 L 44 330 Q 250 100 456 330 L 500 330 L 500 0 L 0 0 Z", x: 250, y: 100 }
+};
+
+const ZoneLabel = ({ x, y, zoneKey, data, mode, totalPoints, defenseRanks }) => {
+  if (mode === 'DEF') {
+    const rank = defenseRanks ? defenseRanks[zoneKey] : null;
+    return (
+      <g>
+        <rect x={x - 24} y={y - 12} width="48" height="24" fill="white" rx="4" stroke="#d4d4d8" strokeWidth="1" shadow="sm" />
+        <text x={x} y={y + 4} fontSize="11" textAnchor="middle" fill="black" fontWeight="800" style={{ pointerEvents: 'none' }}>
+          #{rank || '-'}
+        </text>
+      </g>
+    );
+  }
+
+  if (mode === 'CMB') {
+    const rank = defenseRanks ? defenseRanks[zoneKey] : null;
+    const pct = data?.pct || 0;
+    return (
+      <g>
+        <rect x={x - 24} y={y - 16} width="48" height="32" fill="white" rx="4" stroke="#d4d4d8" strokeWidth="1" shadow="sm" />
+        <text x={x} y={y - 2} fontSize="9" textAnchor="middle" fill="black" fontWeight="800" style={{ pointerEvents: 'none' }}>
+          {Math.round(pct)}%
+        </text>
+        <text x={x} y={y + 10} fontSize="9" textAnchor="middle" fill="#52525b" fontWeight="600" style={{ pointerEvents: 'none' }}>
+          #{rank || '-'}
+        </text>
+      </g>
+    );
+  }
+
   if (!data || data.pct === undefined) return null;
   
   const fga = data.fga || 0;
@@ -127,7 +172,7 @@ const ZoneLabel = ({ x, y, zoneKey, data, mode, totalPoints }) => {
   );
 };
 
-const CourtVisual = ({ zones, mode }) => {
+const CourtVisual = ({ zones, mode, defenseRanks }) => {
   if (!zones) return <div className="h-48 flex items-center justify-center text-zinc-600">Loading Zones...</div>;
 
   // Pre-calculate total points for the 'DIST' mode
@@ -142,37 +187,63 @@ const CourtVisual = ({ zones, mode }) => {
     });
   }
 
-  const getColor = mode === 'DIST' ? getVolumeColor : getEfficiencyColor;
-  const getValue = (z) => mode === 'DIST' ? z?.fga : z?.pct;
+  const getZoneColor = (key) => {
+    const z = zones[key];
+    const rank = defenseRanks ? defenseRanks[key] : null;
+    
+    if (mode === 'DIST') return getVolumeColor(z?.fga);
+    if (mode === 'EFF') return getEfficiencyColor(z?.pct);
+    if (mode === 'DEF') return getDefenseColor(rank);
+    if (mode === 'CMB') {
+         if (!z || !rank) return "#27272a";
+         // Normalize Rank to FG% scale (approx)
+         // Rank 1 (Hard) -> 30%, Rank 30 (Easy) -> 50%
+         const rankEq = 30 + ((rank - 1) / 29) * 20;
+         const avg = (z.pct + rankEq) / 2;
+         return getEfficiencyColor(avg);
+    }
+    return "#27272a";
+  };
 
   return (
     <div className="relative w-full max-w-[500px] mx-auto">
       <svg viewBox="0 0 500 470" className="w-full h-auto">
         <rect width="500" height="470" fill="#18181b" />
+        
+        {/* Zones */}
         <g opacity={0.9}>
-           <path d="M 0 330 L 44 330 L 44 470 L 0 470 Z" fill={getColor(getValue(zones.lc3))} stroke="#09090b" strokeWidth="2"/>
-           <path d="M 456 330 L 500 330 L 500 470 L 456 470 Z" fill={getColor(getValue(zones.rc3))} stroke="#09090b" strokeWidth="2"/>
-           <path d="M 170 470 L 170 280 L 330 280 L 330 470" fill={getColor(getValue(zones.paint))} stroke="#09090b" strokeWidth="2"/>
-           <path d="M 44 470 L 44 330 Q 250 100 456 330 L 456 470 L 330 470 L 330 280 L 170 280 L 170 470 Z" fill={getColor(getValue(zones.mid))} stroke="#09090b" strokeWidth="2"/>
-           <path d="M 0 330 L 44 330 Q 250 100 456 330 L 500 330 L 500 0 L 0 0 Z" fill={getColor(getValue(zones.ab3))} stroke="#09090b" strokeWidth="2"/>
+           {Object.entries(ZONE_PATHS).map(([key, { d }]) => (
+             <path key={key} d={d} fill={getZoneColor(key)} stroke="#09090b" strokeWidth="2" />
+           ))}
         </g>
+
+        {/* Court Lines */}
         <g fill="none" stroke="#000000" strokeWidth="2">
           <circle cx="250" cy="417.5" r="7.5" stroke="#f59e0b" />
           <path d="M 44 470 L 44 330 Q 250 100 456 330 L 456 470" />
           <rect x="170" y="280" width="160" height="190" />
         </g>
+
+        {/* Labels */}
         <g>
-          {/* Adjusted coordinates to prevent clipping */}
-          <ZoneLabel x={35} y={400} zoneKey="lc3" data={zones.lc3} mode={mode} totalPoints={totalPoints} />
-          <ZoneLabel x={465} y={400} zoneKey="rc3" data={zones.rc3} mode={mode} totalPoints={totalPoints} />
-          <ZoneLabel x={250} y={360} zoneKey="paint" data={zones.paint} mode={mode} totalPoints={totalPoints} />
-          <ZoneLabel x={250} y={220} zoneKey="mid" data={zones.mid} mode={mode} totalPoints={totalPoints} />
-          <ZoneLabel x={250} y={90} zoneKey="ab3" data={zones.ab3} mode={mode} totalPoints={totalPoints} />
+          {Object.entries(ZONE_PATHS).map(([key, { x, y }]) => (
+            <ZoneLabel 
+              key={key} 
+              x={x} 
+              y={y} 
+              zoneKey={key} 
+              data={zones[key]} 
+              mode={mode} 
+              totalPoints={totalPoints} 
+              defenseRanks={defenseRanks}
+            />
+          ))}
         </g>
       </svg>
     </div>
   );
 };
+
 
 // --- CHART ---
 const CustomAxisTick = ({ x, y, payload, data }) => {
@@ -250,6 +321,7 @@ export default function App() {
 
   const [teamSchedules, setTeamSchedules] = useState({});
   const [playersList, setPlayersList] = useState([]);
+  const [defenseRanks, setDefenseRanks] = useState({});
 
   const TEAM_IDS = {
     'ATL': 1610612737, 'BOS': 1610612738, 'CLE': 1610612739, 'NOP': 1610612740,
@@ -265,12 +337,14 @@ export default function App() {
   useEffect(() => {
     const initData = async () => {
       try {
-        const [schedRes, rosterRes] = await Promise.all([
+        const [schedRes, rosterRes, defRes] = await Promise.all([
           fetch('http://127.0.0.1:5000/api/schedule'),
-          fetch('http://127.0.0.1:5000/api/roster')
+          fetch('http://127.0.0.1:5000/api/roster'),
+          fetch('http://127.0.0.1:5000/api/defense_ranks')
         ]);
         if (schedRes.ok) setTeamSchedules(await schedRes.json());
         if (rosterRes.ok) setPlayersList(await rosterRes.json());
+        if (defRes.ok) setDefenseRanks(await defRes.json());
       } catch (e) { console.error("Init fetch failed:", e); }
     };
     initData();
@@ -351,6 +425,10 @@ export default function App() {
   const yMax = Math.ceil(maxStatValue + 5);
   
   const currentPlayerObj = playersList.find(p => p.id === activePlayerId);
+  const playerTeam = currentPlayerObj ? currentPlayerObj.team : null;
+  const nextGame = playerTeam ? teamSchedules[playerTeam] : null;
+  const nextOpponent = nextGame ? nextGame.opponent : null;
+  const opponentRanks = nextOpponent && defenseRanks[nextOpponent] ? defenseRanks[nextOpponent] : null;
 
   return (
     <div className={`h-screen w-full ${THEME.bg} ${THEME.text} font-sans flex overflow-hidden`}>
@@ -491,9 +569,9 @@ export default function App() {
                  <div className="bg-[#18181b] p-6 rounded-2xl border border-zinc-800">
                     <div className="flex justify-between mb-6">
                        <h3 className="font-bold text-zinc-200">Season Heatmap</h3>
-                       <SegmentedToggle options={[{label:'% PTS',value:'DIST'},{label:'FG Data',value:'EFF'}]} value={heatmapMode} onChange={setHeatmapMode}/>
+                       <SegmentedToggle options={[{label:'% PTS',value:'DIST'},{label:'FG Data',value:'EFF'},{label:'Matchup',value:'CMB'},{label:'Opp Def',value:'DEF'}]} value={heatmapMode} onChange={setHeatmapMode}/>
                     </div>
-                    <CourtVisual zones={data.zones} mode={heatmapMode} />
+                    <CourtVisual zones={data.zones} mode={heatmapMode} defenseRanks={opponentRanks} />
                     <div className="mt-4 flex justify-center gap-4 text-[10px] text-zinc-500">
                         <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#16a34a]"></div> Good</div>
                         <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-yellow-500"></div> Avg</div>

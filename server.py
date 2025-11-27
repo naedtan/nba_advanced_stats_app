@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-from nba_api.stats.endpoints import playergamelog, leaguedashplayershotlocations, scoreboardv2, commonallplayers, commonplayerinfo
+from nba_api.stats.endpoints import playergamelog, leaguedashplayershotlocations, scoreboardv2, commonallplayers, commonplayerinfo, leaguedashteamstats, leaguedashoppptshot, leaguedashteamshotlocations
 from nba_api.stats.static import players as static_players
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -190,6 +190,81 @@ def get_player_stats(player_id):
     except Exception as e:
         print(f"Error processing player {player_id}: {e}")
         return jsonify({"error": str(e)}), 500
+
+# --- Defense Rankings Endpoint ---
+@app.route('/api/defense_ranks')
+@lru_cache(maxsize=1)
+def get_league_defense_ranks():
+    try:
+        # Get Opponent Shooting by Zone using LeagueDashTeamShotLocations with measure_type_simple='Opponent'
+        opp_shooting = leaguedashteamshotlocations.LeagueDashTeamShotLocations(
+            season='2025-26',
+            measure_type_simple='Opponent',
+            per_mode_detailed='PerGame',
+            headers=HEADERS
+        ).get_data_frames()[0]
+
+        # Flatten MultiIndex columns
+        # Columns are like ('Restricted Area', 'OPP_FG_PCT')
+        # We want to rename them to something easier to work with
+        
+        # Create a copy to avoid SettingWithCopy warnings if any
+        df = opp_shooting.copy()
+        
+        # Flatten columns
+        new_cols = []
+        for col in df.columns:
+            if isinstance(col, tuple):
+                zone, stat = col
+                if zone == '':
+                    new_cols.append(stat)
+                else:
+                    new_cols.append(f"{zone}_{stat}")
+            else:
+                new_cols.append(col)
+        
+        df.columns = new_cols
+        
+        # Map our zone keys to the API column prefixes
+        # API Zones: 'Restricted Area', 'In The Paint (Non-RA)', 'Mid-Range', 'Left Corner 3', 'Right Corner 3', 'Above the Break 3'
+        zone_map = {
+            "ra": "Restricted Area",
+            "paint": "In The Paint (Non-RA)",
+            "mid": "Mid-Range",
+            "lc3": "Left Corner 3",
+            "rc3": "Right Corner 3",
+            "ab3": "Above the Break 3"
+        }
+        
+        # Calculate ranks for each zone based on OPP_FG_PCT
+        # Lower OPP_FG_PCT is better defense (Rank 1)
+        for key, prefix in zone_map.items():
+            col_name = f"{prefix}_OPP_FG_PCT"
+            if col_name in df.columns:
+                df[f"{key}_rank"] = df[col_name].rank(ascending=True, method='min')
+            else:
+                df[f"{key}_rank"] = 15 # Default mid-rank if missing
+
+        result = {}
+        for _, row in df.iterrows():
+            team_id = int(row['TEAM_ID'])
+            abbr = TEAM_MAP.get(team_id, row.get('TEAM_ABBREVIATION', 'UNK'))
+            
+            ranks = {
+                "ra": int(row['ra_rank']),
+                "paint": int(row['paint_rank']),
+                "mid": int(row['mid_rank']),
+                "lc3": int(row['lc3_rank']),
+                "rc3": int(row['rc3_rank']),
+                "ab3": int(row['ab3_rank'])
+            }
+            result[abbr] = ranks
+
+        return jsonify(result)
+
+    except Exception as e:
+        print(f"Error fetching defense ranks: {e}")
+        return jsonify({})
 
 if __name__ == '__main__':
     print("🏀 Optimized NBA Backend running on http://localhost:5000")
