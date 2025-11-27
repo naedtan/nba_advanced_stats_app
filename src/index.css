@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* We override the default Vite body styles here.
+  Vite's default css usually adds 'display: flex' and 'place-items: center'
+  which centers the app like a small card. We want a full-screen dashboard.
+*/
+body {
+  margin: 0;
+  display: block; /* critical to stop centering */
+  min-width: 100vw;
+  min-height: 100vh;
+  background-color: #09090b;
+  color: white;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  text-align: left; /* override default center text */
+}
