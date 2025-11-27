@@ -113,14 +113,24 @@ const ZoneLabel = ({ x, y, zoneKey, data, mode, totalPoints, defenseRanks }) => 
     );
   }
 
+  if (!data || data.pct === undefined) return null;
+  
+  const fga = data.fga || 0;
+  const pct = data.pct || 0;
+  const fgm = ((pct / 100) * fga);
+
   if (mode === 'CMB') {
     const rank = defenseRanks ? defenseRanks[zoneKey] : null;
-    const pct = data?.pct || 0;
+    // Calculate % PTS for label
+    const pointsPerShot = ['lc3', 'rc3', 'ab3'].includes(zoneKey) ? 3 : 2;
+    const zonePoints = fgm * pointsPerShot;
+    const distPct = totalPoints > 0 ? (zonePoints / totalPoints) * 100 : 0;
+
     return (
       <g>
         <rect x={x - 24} y={y - 16} width="48" height="32" fill="white" rx="4" stroke="#d4d4d8" strokeWidth="1" shadow="sm" />
         <text x={x} y={y - 2} fontSize="9" textAnchor="middle" fill="black" fontWeight="800" style={{ pointerEvents: 'none' }}>
-          {Math.round(pct)}%
+          {Math.round(distPct)}%
         </text>
         <text x={x} y={y + 10} fontSize="9" textAnchor="middle" fill="#52525b" fontWeight="600" style={{ pointerEvents: 'none' }}>
           #{rank || '-'}
@@ -128,12 +138,6 @@ const ZoneLabel = ({ x, y, zoneKey, data, mode, totalPoints, defenseRanks }) => 
       </g>
     );
   }
-
-  if (!data || data.pct === undefined) return null;
-  
-  const fga = data.fga || 0;
-  const pct = data.pct || 0;
-  const fgm = ((pct / 100) * fga);
 
   // Mode 1: Distribution (% of Total Points)
   if (mode === 'DIST') {
@@ -175,9 +179,9 @@ const ZoneLabel = ({ x, y, zoneKey, data, mode, totalPoints, defenseRanks }) => 
 const CourtVisual = ({ zones, mode, defenseRanks }) => {
   if (!zones) return <div className="h-48 flex items-center justify-center text-zinc-600">Loading Zones...</div>;
 
-  // Pre-calculate total points for the 'DIST' mode
+  // Pre-calculate total points for the 'DIST' and 'CMB' mode
   let totalPoints = 0;
-  if (mode === 'DIST') {
+  if (mode === 'DIST' || mode === 'CMB') {
     Object.keys(zones).forEach(k => {
       const z = zones[k];
       if (z) {
@@ -196,11 +200,32 @@ const CourtVisual = ({ zones, mode, defenseRanks }) => {
     if (mode === 'DEF') return getDefenseColor(rank);
     if (mode === 'CMB') {
          if (!z || !rank) return "#27272a";
-         // Normalize Rank to FG% scale (approx)
-         // Rank 1 (Hard) -> 30%, Rank 30 (Easy) -> 50%
-         const rankEq = 30 + ((rank - 1) / 29) * 20;
-         const avg = (z.pct + rankEq) / 2;
-         return getEfficiencyColor(avg);
+         
+         // Volume Score (0-4) based on FGA (matching getVolumeColor logic)
+         let volScore = 0;
+         if (z.fga >= 5.0) volScore = 4;
+         else if (z.fga >= 3.0) volScore = 3;
+         else if (z.fga >= 1.5) volScore = 2;
+         else if (z.fga >= 0.5) volScore = 1;
+         
+         // Defense Score (0-4) based on Rank (matching getDefenseColor logic)
+         // Rank > 25 (Easy) -> 4 (Green)
+         // Rank <= 5 (Hard) -> 0 (Red)
+         let defScore = 0;
+         if (rank > 25) defScore = 4;
+         else if (rank > 20) defScore = 3;
+         else if (rank > 10) defScore = 2;
+         else if (rank > 5) defScore = 1;
+         
+         // Average Score
+         const avgScore = (volScore + defScore) / 2;
+         
+         // Map back to colors
+         if (avgScore >= 3.5) return "#16a34a"; // Green
+         if (avgScore >= 2.5) return "#84cc16"; // Lime
+         if (avgScore >= 1.5) return "#eab308"; // Yellow
+         if (avgScore >= 0.5) return "#f97316"; // Orange
+         return "#ef4444"; // Red
     }
     return "#27272a";
   };
