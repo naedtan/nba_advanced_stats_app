@@ -16,31 +16,31 @@ const THEME = {
 const getTeamLogo = (teamId) => `https://cdn.nba.com/logos/nba/${teamId}/primary/L/logo.svg`;
 
 // --- COLOR SCALES ---
-const getVolumeColor = (fga) => {
-  if (fga === undefined || fga === null) return "#27272a"; 
-  if (fga >= 5.0) return "#16a34a"; 
-  if (fga >= 3.0) return "#84cc16"; 
-  if (fga >= 1.5) return "#eab308"; 
-  if (fga >= 0.5) return "#f97316"; 
-  return "#ef4444";                 
+const getEfficiencyColor = (pct) => {
+  if (pct === undefined || pct === null) return "#27272a"; // Default color for undefined values
+  if (pct >= 60) return "#16a34a"; // Green for >= 50%
+  if (pct >= 50) return "#84cc16"; // Lime for >= 30%
+  if (pct >= 40) return "#eab308"; // Yellow for >= 25%
+  if (pct >= 30) return "#f97316"; // Orange for >= 8%
+  return "#ef4444"; // Red for < 8%
 };
 
-const getEfficiencyColor = (pct) => {
-  if (pct === undefined || pct === null) return "#27272a";
-  if (pct >= 50) return "#16a34a"; 
-  if (pct >= 40) return "#84cc16"; 
-  if (pct >= 35) return "#eab308"; 
-  if (pct >= 30) return "#f97316"; 
-  return "#ef4444";                
+const getPointsPercentageColor = (pct) => {
+  if (pct === undefined || pct === null) return "#27272a"; // Default color for undefined values
+  if (pct >= 40) return "#16a34a"; // Green for >= 50%
+  if (pct >= 25) return "#84cc16"; // Lime for >= 30%
+  if (pct >= 15) return "#eab308"; // Yellow for >= 20%
+  if (pct >= 6) return "#f97316"; // Orange for >= 9%
+  return "#ef4444"; // Red for < 9%
 };
 
 const getDefenseColor = (rank) => {
   if (!rank) return "#27272a";
-  if (rank <= 5) return "#ef4444"; // Top 5 Defense (Hard) -> Red
-  if (rank <= 10) return "#f97316";
-  if (rank <= 20) return "#eab308";
+  if (rank <= 5) return "#ef4444"; 
+  if (rank <= 12) return "#f97316";
+  if (rank <= 18) return "#eab308";
   if (rank <= 25) return "#84cc16";
-  return "#16a34a"; // Bottom 5 Defense (Easy) -> Green
+  return "#16a34a"; 
 };
 
 // --- SLIDER COMPONENT ---
@@ -194,8 +194,15 @@ const CourtVisual = ({ zones, mode, defenseRanks }) => {
   const getZoneColor = (key) => {
     const z = zones[key];
     const rank = defenseRanks ? defenseRanks[key] : null;
-    
-    if (mode === 'DIST') return getVolumeColor(z?.fga);
+
+    if (mode === 'DIST') {
+      // Calculate % PTS for color
+      const pointsPerShot = ['lc3', 'rc3', 'ab3'].includes(key) ? 3 : 2;
+      const zonePoints = z ? ((z.pct / 100) * z.fga) * pointsPerShot : 0;
+      const distPct = totalPoints > 0 ? (zonePoints / totalPoints) * 100 : 0;
+      return getPointsPercentageColor(distPct); // Use % PTS for color
+    }
+
     if (mode === 'EFF') return getEfficiencyColor(z?.pct);
     if (mode === 'DEF') return getDefenseColor(rank);
     if (mode === 'CMB') {
@@ -208,9 +215,6 @@ const CourtVisual = ({ zones, mode, defenseRanks }) => {
          else if (z.fga >= 1.5) volScore = 2;
          else if (z.fga >= 0.5) volScore = 1;
          
-         // Defense Score (0-4) based on Rank (matching getDefenseColor logic)
-         // Rank > 25 (Easy) -> 4 (Green)
-         // Rank <= 5 (Hard) -> 0 (Red)
          let defScore = 0;
          if (rank > 25) defScore = 4;
          else if (rank > 20) defScore = 3;
@@ -221,6 +225,7 @@ const CourtVisual = ({ zones, mode, defenseRanks }) => {
          const avgScore = (volScore + defScore) / 2;
          
          // Map back to colors
+         // fix this later
          if (avgScore >= 3.5) return "#16a34a"; // Green
          if (avgScore >= 2.5) return "#84cc16"; // Lime
          if (avgScore >= 1.5) return "#eab308"; // Yellow

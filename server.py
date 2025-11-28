@@ -75,7 +75,6 @@ def get_schedule():
         check_date = today + timedelta(days=i)
         date_str = check_date.strftime('%Y-%m-%d')
         
-        # FIX: Use Month Day format (e.g. "Nov 28")
         day_label = check_date.strftime('%b %d')
 
         try:
