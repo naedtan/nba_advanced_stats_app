@@ -208,7 +208,11 @@ const CourtVisual = ({ zones, mode, defenseRanks }) => {
     if (mode === 'CMB') {
          if (!z || !rank) return "#27272a";
          
-         // Volume Score (0-4) based on FGA (matching getVolumeColor logic)
+         // Calculate % PTS for color adjustment
+         const pointsPerShot = ['lc3', 'rc3', 'ab3'].includes(key) ? 3 : 2;
+         const zonePoints = z ? ((z.pct / 100) * z.fga) * pointsPerShot : 0;
+         const distPct = totalPoints > 0 ? (zonePoints / totalPoints) * 100 : 0;
+
          let volScore = 0;
          if (z.fga >= 5.0) volScore = 4;
          else if (z.fga >= 3.0) volScore = 3;
@@ -221,11 +225,13 @@ const CourtVisual = ({ zones, mode, defenseRanks }) => {
          else if (rank > 10) defScore = 2;
          else if (rank > 5) defScore = 1;
          
+         // Adjust color based on % PTS
+         if (distPct < 10) return "#ef4444"; // Red for low % PTS
+         
          // Average Score
          const avgScore = (volScore + defScore) / 2;
          
          // Map back to colors
-         // fix this later
          if (avgScore >= 3.5) return "#16a34a"; // Green
          if (avgScore >= 2.5) return "#84cc16"; // Lime
          if (avgScore >= 1.5) return "#eab308"; // Yellow
@@ -613,7 +619,7 @@ export default function App() {
                     <div className="overflow-auto max-h-[400px]"><table className="w-full text-sm text-left"><thead className="text-zinc-500 border-b border-zinc-800"><tr><th className="pb-2">Date</th><th>Opp</th><th className="text-right">{statMode}</th></tr></thead><tbody>{processedGames.map((g,i)=><tr key={i} className="hover:bg-zinc-900/50"><td className="py-3 text-zinc-400">{g.GAME_DATE}</td><td className="font-bold">{g.MATCHUP}</td><td className={`text-right font-bold ${g[statMode]>=customLine?'text-emerald-500':'text-zinc-500'}`}>{g[statMode]}</td></tr>)}</tbody></table></div>
                  </div>
               </div>
-           </div>
+         </div>
          )}
       </main>
     </div>
